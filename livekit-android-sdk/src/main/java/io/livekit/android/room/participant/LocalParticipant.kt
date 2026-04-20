@@ -1890,6 +1890,7 @@ data class AudioTrackPublishDefaults(
     override val dtx: Boolean = true,
     override val red: Boolean = true,
     override val preconnect: Boolean = false,
+    val stereo: Boolean = false,
 ) : BaseAudioTrackPublishOptions()
 
 /**
@@ -1903,6 +1904,7 @@ data class AudioTrackPublishOptions(
     override val source: Track.Source? = null,
     override val stream: String? = null,
     override val preconnect: Boolean = false,
+    val stereo: Boolean = false,
 ) : BaseAudioTrackPublishOptions(), TrackPublishOptions {
     constructor(
         name: String? = null,
@@ -1916,6 +1918,7 @@ data class AudioTrackPublishOptions(
         red = base.red,
         source = source,
         stream = stream,
+        stereo = (base as? AudioTrackPublishDefaults)?.stereo ?: false,
     )
 
     internal fun getFeaturesList(): Set<AudioTrackFeature> {
@@ -1925,6 +1928,9 @@ data class AudioTrackPublishOptions(
         }
         if (preconnect) {
             features.add(AudioTrackFeature.TF_PRECONNECT_BUFFER)
+        }
+        if (stereo) {
+            features.add(AudioTrackFeature.TF_STEREO)
         }
         return features
     }
