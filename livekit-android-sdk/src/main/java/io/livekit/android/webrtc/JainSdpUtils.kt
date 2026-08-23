@@ -42,6 +42,9 @@ package io.livekit.android.webrtc
 
 import android.gov.nist.javax.sdp.fields.AttributeField
 import android.javax.sdp.MediaDescription
+import android.javax.sdp.SdpException
+import android.javax.sdp.SdpFactory
+import android.javax.sdp.SdpParseException
 import io.livekit.android.util.LKLog
 
 /**
@@ -175,3 +178,81 @@ internal fun tryParseExt(string: String): SdpExt? {
 
 internal fun toOptionalLong(str: String): Long? = if (str.isEmpty()) null else str.toLong()
 internal fun toOptionalString(str: String): String? = str.ifEmpty { null }
+
+/**
+ * Munges the session description so that Opus fmtp lines carry `stereo=1`
+ * for all audio mids where the remote offer advertised `sprop-stereo=1`.
+ * Without this, the native Opus decoder downmixes incoming stereo to mono.
+ */
+fun SessionDescription.ensureStereoOpus(): SessionDescription {
+    val sdpFactory = SdpFactory.getInstance()
+    val parsed = sdpFactory.createSessionDescription(description)
+    val stereoMids = mutableListOf<String>()
+    for (media in parsed.mediaDescriptions) {
+        if (media !is MediaDescription) continue
+        if (media.media.mediaType != "audio") continue
+
+        var opusPayload: Long? = null
+        for ((_, rtp) in media.getRtps()) {
+            if (rtp.codec.equals("opus", ignoreCase = true)) {
+                opusPayload = rtp.payload
+                break
+            }
+        }
+        val payload = opusPayload ?: continue
+
+        val publisherStereo = media.getFmtps().any { (attr, fmtp) ->
+            fmtp.payload == payload && fmtp.config.split(";").any {
+                it.trim() == "sprop-stereo=1"
+            }
+        }
+        if (publisherStereo) {
+            try {
+                media.getAttribute("mid")?.let { stereoMids.add(it) }
+            } catch (_: SdpParseException) {
+            }
+        }
+    }
+
+    if (stereoMids.isEmpty()) {
+        return this
+    }
+
+    for (media in parsed.mediaDescriptions) {
+        if (media !is MediaDescription) continue
+        if (media.media.mediaType != "audio") continue
+        val mid = try {
+            media.getAttribute("mid")
+        } catch (_: SdpParseException) {
+            null
+        } ?: continue
+        if (mid !in stereoMids) continue
+
+        var opusPayload: Long? = null
+        for ((_, rtp) in media.getRtps()) {
+            if (rtp.codec.equals("opus", ignoreCase = true)) {
+                opusPayload = rtp.payload
+                break
+            }
+        }
+        val payload = opusPayload ?: continue
+
+        val fmtps = media.getFmtps()
+        var found = false
+        for ((attribute, fmtp) in fmtps) {
+            if (fmtp.payload != payload) continue
+            found = true
+            if (!fmtp.config.split(";").any { it.trim() == "stereo=1" }) {
+                attribute.value = "${fmtp.payload} ${fmtp.config};stereo=1"
+            }
+            break
+        }
+        if (!found) {
+            media.addAttribute(
+                SdpFmtp(payload, "stereo=1").toAttributeField(),
+            )
+        }
+    }
+
+    return SessionDescription(type, parsed.toString())
+}

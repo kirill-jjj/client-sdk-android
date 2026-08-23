@@ -54,6 +54,7 @@ import io.livekit.android.webrtc.DataChannelManager
 import io.livekit.android.webrtc.DataPacketBuffer
 import io.livekit.android.webrtc.DataPacketItem
 import io.livekit.android.webrtc.RTCStatsGetter
+import io.livekit.android.webrtc.ensureStereoOpus
 import io.livekit.android.webrtc.copy
 import io.livekit.android.webrtc.isConnected
 import io.livekit.android.webrtc.isDisconnected
@@ -1158,8 +1159,18 @@ internal constructor(
                 return@launch
             }
 
+            // The native Opus decoder downmixes incoming stereo to mono unless the
+            // subscriber's answer carries stereo=1 for mids where the publisher's
+            // offer advertised sprop-stereo=1. The SDK has no built-in handling.
+            val stereoAnswer = try {
+                answer.ensureStereoOpus()
+            } catch (e: Exception) {
+                LKLog.w { "stereo sdp munging failed, using unmodified answer" }
+                answer
+            }
+
             run<Unit> {
-                when (val outcome = subscriber?.withPeerConnection { setLocalDescription(answer) }.nullSafe()) {
+                when (val outcome = subscriber?.withPeerConnection { setLocalDescription(stereoAnswer) }.nullSafe()) {
                     is Either.Left -> Unit
                     is Either.Right -> {
                         LKLog.e { "error setting local description for answer: ${outcome.value}" }
@@ -1171,7 +1182,7 @@ internal constructor(
             if (isClosed) {
                 return@launch
             }
-            client.sendAnswer(answer, offerId)
+            client.sendAnswer(stereoAnswer, offerId)
         }
     }
 
