@@ -189,12 +189,13 @@ fun SessionDescription.ensureStereoOpus(): SessionDescription {
     val sdpFactory = SdpFactory.getInstance()
     val parsed = sdpFactory.createSessionDescription(description)
     val stereoMids = mutableListOf<String>()
-    for (media in parsed.mediaDescriptions) {
-        if (media !is MediaDescription) continue
-        if (media.media.mediaType != "audio") continue
+    val mediaDescs = parsed.mediaDescriptions
+    for (mediaDesc in mediaDescs) {
+        if (mediaDesc !is MediaDescription) continue
+        if (mediaDesc.media.mediaType != "audio") continue
 
         var opusPayload: Long? = null
-        for ((_, rtp) in media.getRtps()) {
+        for ((_, rtp) in mediaDesc.getRtps()) {
             if (rtp.codec.equals("opus", ignoreCase = true)) {
                 opusPayload = rtp.payload
                 break
@@ -202,14 +203,17 @@ fun SessionDescription.ensureStereoOpus(): SessionDescription {
         }
         val payload = opusPayload ?: continue
 
-        val publisherStereo = media.getFmtps().any { (_, fmtp) ->
-            fmtp.payload == payload && fmtp.config.split(";").any {
-                it.trim() == "sprop-stereo=1"
+        val publisherStereo = mediaDesc.getFmtps().any { (_, fmtp) ->
+            fmtp.payload == payload && fmtp.config.split(";").any { cfg ->
+                cfg.trim() == "sprop-stereo=1"
             }
         }
         if (publisherStereo) {
             try {
-                media.getAttribute("mid")?.let { stereoMids.add(it) }
+                val mid = mediaDesc.getAttribute("mid")
+                if (mid != null) {
+                    stereoMids.add(mid)
+                }
             } catch (_: SdpParseException) {
             }
         }
@@ -219,18 +223,18 @@ fun SessionDescription.ensureStereoOpus(): SessionDescription {
         return this
     }
 
-    for (media in parsed.mediaDescriptions) {
-        if (media !is MediaDescription) continue
-        if (media.media.mediaType != "audio") continue
+    for (mediaDesc in mediaDescs) {
+        if (mediaDesc !is MediaDescription) continue
+        if (mediaDesc.media.mediaType != "audio") continue
         val mid = try {
-            media.getAttribute("mid")
+            mediaDesc.getAttribute("mid")
         } catch (_: SdpParseException) {
             null
         } ?: continue
         if (mid !in stereoMids) continue
 
         var opusPayload: Long? = null
-        for ((_, rtp) in media.getRtps()) {
+        for ((_, rtp) in mediaDesc.getRtps()) {
             if (rtp.codec.equals("opus", ignoreCase = true)) {
                 opusPayload = rtp.payload
                 break
@@ -238,18 +242,19 @@ fun SessionDescription.ensureStereoOpus(): SessionDescription {
         }
         val payload = opusPayload ?: continue
 
-        val fmtps = media.getFmtps()
         var found = false
-        for ((attrPair, fmtp) in fmtps) {
+        for ((attrField, fmtp) in mediaDesc.getFmtps()) {
             if (fmtp.payload != payload) continue
             found = true
-            if (!fmtp.config.split(";").any { it.trim() == "stereo=1" }) {
-                attrPair.attribute.value = "${fmtp.payload} ${fmtp.config};stereo=1"
+            var config = fmtp.config
+            if (!config.split(";").any { it.trim() == "stereo=1" }) {
+                config = "$config;stereo=1"
+                attrField.attribute.value = "${fmtp.payload} $config"
             }
             break
         }
         if (!found) {
-            media.addAttribute(
+            mediaDesc.addAttribute(
                 SdpFmtp(payload, "stereo=1").toAttributeField(),
             )
         }
