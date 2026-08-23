@@ -1165,7 +1165,18 @@ internal constructor(
                 when (val outcome = subscriber?.withPeerConnection { setLocalDescription(stereoAnswer) }.nullSafe()) {
                     is Either.Left -> Unit
                     is Either.Right -> {
-                        LKLog.e { "error setting local description for answer: ${outcome.value}" }
+                        LKLog.e { "error setting local description for munged answer: ${outcome.value}" }
+                        // Fall back to the un-munged answer rather than leaving the
+                        // subscriber without a local description (mirrors
+                        // PeerConnectionTransport.setMungedSdp).
+                        when (val fallback = subscriber?.withPeerConnection { setLocalDescription(answer) }.nullSafe()) {
+                            is Either.Left -> Unit
+                            is Either.Right -> {
+                                LKLog.e { "error setting local description for answer: ${fallback.value}" }
+                                return@launch
+                            }
+                        }
+                        client.sendAnswer(answer, offerId)
                         return@launch
                     }
                 }

@@ -1698,6 +1698,9 @@ data class AudioTrackPublishOptions(
     override val audioBitrate: Int? = null,
     override val dtx: Boolean = true,
     override val red: Boolean = true,
+    /**
+     * Publish the track as stereo, sent as `stereo` in the AddTrackRequest.
+     */
     val stereo: Boolean = false,
     override val source: Track.Source? = null,
     override val stream: String? = null,
