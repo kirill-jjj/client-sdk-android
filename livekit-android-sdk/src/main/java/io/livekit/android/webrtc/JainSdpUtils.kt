@@ -259,7 +259,11 @@ fun SessionDescription.ensureStereoOpus(): SessionDescription {
             var config = fmtp.config
             if (!config.split(";").any { cfg -> cfg.trim() == "stereo=1" }) {
                 config = "$config;stereo=1"
-                attrField.attribute.value = "${fmtp.payload} $config"
+                try {
+                    attrField.setValue("${fmtp.payload} $config")
+                } catch (_: SdpException) {
+                    LKLog.w { "failed to set stereo fmtp" }
+                }
             }
             break
         }
