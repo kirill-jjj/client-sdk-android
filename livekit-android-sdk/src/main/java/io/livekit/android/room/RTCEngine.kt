@@ -1163,7 +1163,7 @@ internal constructor(
             // subscriber's answer carries stereo=1 for mids where the publisher's
             // offer advertised sprop-stereo=1. The SDK has no built-in handling.
             val stereoAnswer = try {
-                answer.ensureStereoOpus()
+                answer.ensureStereoOpus(sessionDescription)
             } catch (e: Exception) {
                 LKLog.w { "stereo sdp munging failed: ${e.message}" }
                 answer

@@ -9,19 +9,25 @@ import io.livekit.android.util.LKLog
 import livekit.org.webrtc.SessionDescription
 
 /**
- * Munges the session description so that Opus fmtp lines carry `stereo=1`
- * for all audio mids where the remote offer advertised `sprop-stereo=1`.
+ * Munges the subscriber's answer so that Opus fmtp lines carry `stereo=1`
+ * for all audio mids where the server offer advertised `sprop-stereo=1`.
  * Without this, the native Opus decoder downmixes incoming stereo to mono.
  */
-fun SessionDescription.ensureStereoOpus(): SessionDescription {
+fun SessionDescription.ensureStereoOpus(offer: SessionDescription): SessionDescription {
     val sdpFactory = SdpFactory.getInstance()
     val parsed = try {
         sdpFactory.createSessionDescription(description)
     } catch (e: SdpParseException) {
-        LKLog.w { "stereo munging: could not parse sdp" }
+        LKLog.w { "stereo munging: could not parse answer sdp" }
         return this
     }
-    val stereoMids = findStereoMids(parsed)
+    val parsedOffer = try {
+        sdpFactory.createSessionDescription(offer.description)
+    } catch (e: SdpParseException) {
+        LKLog.w { "stereo munging: could not parse offer sdp" }
+        return this
+    }
+    val stereoMids = findStereoMids(parsedOffer)
     if (stereoMids.isEmpty()) {
         return this
     }
