@@ -1,6 +1,6 @@
 package io.livekit.android.webrtc
 
-import android.gov.nist.javax.sdp.fields.AttributeField
+import androidx.annotation.VisibleForTesting
 import android.javax.sdp.MediaDescription
 import android.javax.sdp.SdpException
 import android.javax.sdp.SdpFactory
@@ -26,6 +26,7 @@ private const val MID_ATTRIBUTE = "mid"
  *
  * @suppress
  */
+@VisibleForTesting
 internal fun SessionDescription.ensureStereoOpus(offer: SessionDescription): SessionDescription {
     val sdpFactory = SdpFactory.getInstance()
     val parsedAnswer = parseSessionDescription(sdpFactory, description) ?: return this
@@ -70,10 +71,15 @@ private fun mediaDescriptionsOf(parsed: android.javax.sdp.SessionDescription): L
     return raw.filterIsInstance<MediaDescription>()
 }
 
-private fun findStereoMids(offer: android.javax.sdp.SessionDescription): List<String> =
-    mediaDescriptionsOf(offer)
-        .filter { mediaDesc -> isPublisherStereo(mediaDesc) }
-        .mapNotNull(::midOf)
+private fun findStereoMids(offer: android.javax.sdp.SessionDescription): List<String> {
+    val mids = mutableListOf<String>()
+    for (mediaDesc in mediaDescriptionsOf(offer)) {
+        if (isPublisherStereo(mediaDesc)) {
+            midOf(mediaDesc)?.let { mids.add(it) }
+        }
+    }
+    return mids
+}
 
 private fun midOf(mediaDesc: MediaDescription): String? = try {
     mediaDesc.getAttribute(MID_ATTRIBUTE)
@@ -83,36 +89,48 @@ private fun midOf(mediaDesc: MediaDescription): String? = try {
 
 private fun isPublisherStereo(mediaDesc: MediaDescription): Boolean {
     val payloadType = findOpusPayloadType(mediaDesc) ?: return false
-    return mediaDesc.getFmtps().any { (_, fmtp) ->
-        fmtp.payload == payloadType && fmtp.hasFmtpParam(SPROP_STEREO_FMTP_PARAM)
+    for ((_, fmtp) in mediaDesc.getFmtps()) {
+        if (fmtp.payload == payloadType && fmtp.config.split(";").any { it.trim() == SPROP_STEREO_FMTP_PARAM }) {
+            return true
+        }
     }
+    return false
 }
 
-private fun findOpusPayloadType(mediaDesc: MediaDescription): Long? =
-    mediaDesc.getRtps()
-        .firstOrNull { (_, rtp) -> rtp.codec.equals(OPUS_CODEC, ignoreCase = true) }
-        ?.second
-        ?.payload
+private fun findOpusPayloadType(mediaDesc: MediaDescription): Long? {
+    for ((_, rtp) in mediaDesc.getRtps()) {
+        if (rtp.codec.equals(OPUS_CODEC, ignoreCase = true)) {
+            return rtp.payload
+        }
+    }
+    return null
+}
 
-private fun SdpFmtp.hasFmtpParam(param: String): Boolean =
-    config.split(";").any { it.trim() == param }
-
+/* The native Opus decoder requires both sides of the negotiation to carry
+stereo=1. The server only puts sprop-stereo=1 into its offer; the answer must
+add the stereo=1 parameter itself or received packets are decoded as mono.
+*/
 private fun ensureStereoFmtpParam(mediaDesc: MediaDescription, payloadType: Long) {
-    val existing = mediaDesc.getFmtps().firstOrNull { (_, fmtp) -> fmtp.payload == payloadType }
-    if (existing == null) {
+    var fmtpFound = false
+    for ((attribute, fmtp) in mediaDesc.getFmtps()) {
+        if (fmtp.payload != payloadType) {
+            continue
+        }
+        fmtpFound = true
+        if (!fmtp.config.split(";").any { it.trim() == STEREO_FMTP_PARAM }) {
+            try {
+                attribute.setValue("${fmtp.payload} ${fmtp.config};$STEREO_FMTP_PARAM")
+            } catch (_: SdpException) {
+                LKLog.w { "stereo munging: failed to update opus fmtp line" }
+            }
+        }
+        break
+    }
+
+    // Not found, add manually
+    if (!fmtpFound) {
         mediaDesc.addAttribute(
             SdpFmtp(payloadType, STEREO_FMTP_PARAM).toAttributeField(),
         )
-        return
-    }
-
-    val (attributeField, fmtp) = existing
-    if (fmtp.hasFmtpParam(STEREO_FMTP_PARAM)) {
-        return
-    }
-    try {
-        attributeField.setValue("${fmtp.payload} ${fmtp.config};$STEREO_FMTP_PARAM")
-    } catch (_: SdpException) {
-        LKLog.w { "stereo munging: failed to update opus fmtp line" }
     }
 }
