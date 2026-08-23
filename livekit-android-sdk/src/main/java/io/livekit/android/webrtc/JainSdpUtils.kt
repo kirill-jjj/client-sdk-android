@@ -46,6 +46,7 @@ import android.javax.sdp.SdpException
 import android.javax.sdp.SdpFactory
 import android.javax.sdp.SdpParseException
 import io.livekit.android.util.LKLog
+import livekit.org.webrtc.SessionDescription
 
 /**
  * @suppress
@@ -201,7 +202,7 @@ fun SessionDescription.ensureStereoOpus(): SessionDescription {
         }
         val payload = opusPayload ?: continue
 
-        val publisherStereo = media.getFmtps().any { (attr, fmtp) ->
+        val publisherStereo = media.getFmtps().any { (_, fmtp) ->
             fmtp.payload == payload && fmtp.config.split(";").any {
                 it.trim() == "sprop-stereo=1"
             }
@@ -239,11 +240,11 @@ fun SessionDescription.ensureStereoOpus(): SessionDescription {
 
         val fmtps = media.getFmtps()
         var found = false
-        for ((attribute, fmtp) in fmtps) {
+        for ((attrPair, fmtp) in fmtps) {
             if (fmtp.payload != payload) continue
             found = true
             if (!fmtp.config.split(";").any { it.trim() == "stereo=1" }) {
-                attribute.value = "${fmtp.payload} ${fmtp.config};stereo=1"
+                attrPair.attribute.value = "${fmtp.payload} ${fmtp.config};stereo=1"
             }
             break
         }
