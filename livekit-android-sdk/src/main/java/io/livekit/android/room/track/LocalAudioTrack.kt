@@ -204,7 +204,12 @@ constructor(
         if (options.autoGainControl) {
             features.add(AudioTrackFeature.TF_AUTO_GAIN_CONTROL)
         }
-        // TODO: Handle getting other info from JavaAudioDeviceModule
+        if (options.stereo) {
+            features.add(AudioTrackFeature.TF_STEREO)
+        }
+        // Note: stereo is sourced from options, not introspected from
+        // JavaAudioDeviceModule; callers that enable stereo input via a module
+        // customizer should set LocalAudioTrackOptions.stereo to match.
         return features
     }
 

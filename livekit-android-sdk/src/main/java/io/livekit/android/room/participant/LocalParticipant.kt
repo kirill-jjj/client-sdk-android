@@ -499,6 +499,7 @@ internal constructor(
                     disableRed = !options.red
                     addAllAudioFeatures(options.getFeaturesList())
                     source = options.source?.toProto() ?: LivekitModels.TrackSource.MICROPHONE
+                    stereo = options.stereo || track.options.stereo
                 },
                 encodings = encodings,
                 publishListener = publishListener,
@@ -1697,6 +1698,7 @@ data class AudioTrackPublishOptions(
     override val audioBitrate: Int? = null,
     override val dtx: Boolean = true,
     override val red: Boolean = true,
+    val stereo: Boolean = false,
     override val source: Track.Source? = null,
     override val stream: String? = null,
     override val preconnect: Boolean = false,

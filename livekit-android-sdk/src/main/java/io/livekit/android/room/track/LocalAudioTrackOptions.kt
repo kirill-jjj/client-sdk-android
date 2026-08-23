@@ -24,6 +24,7 @@ data class LocalAudioTrackOptions(
     val autoGainControl: Boolean = true,
     val highPassFilter: Boolean = true,
     val typingNoiseDetection: Boolean = true,
+    val stereo: Boolean = false,
 )
 
 internal fun LocalAudioTrackOptions.toAudioProcessingOptions(): AudioProcessingOptions {

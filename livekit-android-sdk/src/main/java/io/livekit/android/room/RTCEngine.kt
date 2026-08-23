@@ -54,6 +54,7 @@ import io.livekit.android.webrtc.DataChannelManager
 import io.livekit.android.webrtc.DataPacketBuffer
 import io.livekit.android.webrtc.DataPacketItem
 import io.livekit.android.webrtc.RTCStatsGetter
+import io.livekit.android.webrtc.ensureStereoOpus
 import io.livekit.android.webrtc.copy
 import io.livekit.android.webrtc.isConnected
 import io.livekit.android.webrtc.isDisconnected
@@ -1158,8 +1159,10 @@ internal constructor(
                 return@launch
             }
 
+            val stereoAnswer = answer.ensureStereoOpus(sessionDescription)
+
             run<Unit> {
-                when (val outcome = subscriber?.withPeerConnection { setLocalDescription(answer) }.nullSafe()) {
+                when (val outcome = subscriber?.withPeerConnection { setLocalDescription(stereoAnswer) }.nullSafe()) {
                     is Either.Left -> Unit
                     is Either.Right -> {
                         LKLog.e { "error setting local description for answer: ${outcome.value}" }
@@ -1171,7 +1174,7 @@ internal constructor(
             if (isClosed) {
                 return@launch
             }
-            client.sendAnswer(answer, offerId)
+            client.sendAnswer(stereoAnswer, offerId)
         }
     }
 
