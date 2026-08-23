@@ -189,13 +189,18 @@ fun SessionDescription.ensureStereoOpus(): SessionDescription {
     val sdpFactory = SdpFactory.getInstance()
     val parsed = sdpFactory.createSessionDescription(description)
     val stereoMids = mutableListOf<String>()
-    val mediaDescs = parsed.mediaDescriptions
+    val mediaDescs = try {
+        parsed.mediaDescriptions
+    } catch (_: SdpException) {
+        return this
+    }
     for (mediaDesc in mediaDescs) {
         if (mediaDesc !is MediaDescription) continue
         if (mediaDesc.media.mediaType != "audio") continue
 
         var opusPayload: Long? = null
-        for ((_, rtp) in mediaDesc.getRtps()) {
+        for (rtpEntry in mediaDesc.getRtps()) {
+            val rtp = rtpEntry.second
             if (rtp.codec.equals("opus", ignoreCase = true)) {
                 opusPayload = rtp.payload
                 break
@@ -203,7 +208,8 @@ fun SessionDescription.ensureStereoOpus(): SessionDescription {
         }
         val payload = opusPayload ?: continue
 
-        val publisherStereo = mediaDesc.getFmtps().any { (_, fmtp) ->
+        val publisherStereo = mediaDesc.getFmtps().any { entry ->
+            val fmtp = entry.second
             fmtp.payload == payload && fmtp.config.split(";").any { cfg ->
                 cfg.trim() == "sprop-stereo=1"
             }
@@ -234,7 +240,8 @@ fun SessionDescription.ensureStereoOpus(): SessionDescription {
         if (mid !in stereoMids) continue
 
         var opusPayload: Long? = null
-        for ((_, rtp) in mediaDesc.getRtps()) {
+        for (rtpEntry in mediaDesc.getRtps()) {
+            val rtp = rtpEntry.second
             if (rtp.codec.equals("opus", ignoreCase = true)) {
                 opusPayload = rtp.payload
                 break
@@ -243,11 +250,13 @@ fun SessionDescription.ensureStereoOpus(): SessionDescription {
         val payload = opusPayload ?: continue
 
         var found = false
-        for ((attrField, fmtp) in mediaDesc.getFmtps()) {
+        for (entry in mediaDesc.getFmtps()) {
+            val attrField = entry.first
+            val fmtp = entry.second
             if (fmtp.payload != payload) continue
             found = true
             var config = fmtp.config
-            if (!config.split(";").any { it.trim() == "stereo=1" }) {
+            if (!config.split(";").any { cfg -> cfg.trim() == "stereo=1" }) {
                 config = "$config;stereo=1"
                 attrField.attribute.value = "${fmtp.payload} $config"
             }
