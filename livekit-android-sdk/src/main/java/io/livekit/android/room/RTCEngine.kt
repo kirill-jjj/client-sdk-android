@@ -1165,7 +1165,7 @@ internal constructor(
             val stereoAnswer = try {
                 answer.ensureStereoOpus()
             } catch (e: Exception) {
-                LKLog.w { "stereo sdp munging failed, using unmodified answer" }
+                LKLog.w { "stereo sdp munging failed: ${e.message}" }
                 answer
             }
 
