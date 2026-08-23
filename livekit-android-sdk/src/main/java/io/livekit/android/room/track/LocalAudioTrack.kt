@@ -204,7 +204,9 @@ constructor(
         if (options.autoGainControl) {
             features.add(AudioTrackFeature.TF_AUTO_GAIN_CONTROL)
         }
-        // TODO: Handle getting other info from JavaAudioDeviceModule
+        if (options.stereo) {
+            features.add(AudioTrackFeature.TF_STEREO)
+        }
         return features
     }
 
