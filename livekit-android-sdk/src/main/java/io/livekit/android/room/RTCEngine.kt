@@ -1159,15 +1159,7 @@ internal constructor(
                 return@launch
             }
 
-            // The native Opus decoder downmixes incoming stereo to mono unless the
-            // subscriber's answer carries stereo=1 for mids where the publisher's
-            // offer advertised sprop-stereo=1. The SDK has no built-in handling.
-            val stereoAnswer = try {
-                answer.ensureStereoOpus(sessionDescription)
-            } catch (e: Exception) {
-                LKLog.w { "stereo sdp munging failed: ${e.message}" }
-                answer
-            }
+            val stereoAnswer = answer.ensureStereoOpus(sessionDescription)
 
             run<Unit> {
                 when (val outcome = subscriber?.withPeerConnection { setLocalDescription(stereoAnswer) }.nullSafe()) {
